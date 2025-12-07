@@ -11,17 +11,8 @@
     refetchInterval: 5000,
   }));
 
-  const fmt = (/** @type {any} */ n) => new Intl.NumberFormat().format(n || 0);
-
-  const formatDate = (/** @type {string | number | Date} */ dateString) => {
-    if (!dateString) return "Never";
-    return new Date(dateString).toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
+  import MethodBadge from "$lib/components/MethodBadge.svelte";
+  import { fmt, formatDate, clamp } from "./utils/format";
 </script>
 
 <div
@@ -39,11 +30,12 @@
     <div
       class="flex items-center gap-3 bg-neutral-900/50 px-4 py-2 rounded-full border border-neutral-800"
     >
-      <div
-        class="h-2.5 w-2.5 rounded-full shadow-[0_0_10px_currentColor] {query.isFetching
-          ? 'bg-yellow-400 text-yellow-400'
-          : 'bg-green-500 text-green-500'} transition-colors duration-500"
-      ></div>
+      <div aria-live="polite">
+        <div
+          class="h-2.5 w-2.5 rounded-full shadow-[0_0_10px_currentColor]
+      {query.isFetching ? 'bg-yellow-400' : 'bg-green-500'}"
+        ></div>
+      </div>
       <span
         class="text-xs font-medium tracking-wide uppercase text-neutral-400"
       >
@@ -83,6 +75,8 @@
                 <img
                   src={stream.image}
                   alt={stream.title}
+                  loading="lazy"
+                  decoding="async"
                   class="w-full h-full object-cover opacity-30 blur-sm group-hover:blur-0 group-hover:opacity-40 transition-all duration-700"
                 />
                 <div
@@ -102,22 +96,13 @@
                       <p class="font-bold text-white leading-none text-sm">
                         {stream.user}
                       </p>
-                      <p
-                        class="text-xs text-neutral-400 mt-1 max-w-[120px] truncate"
-                      >
+                      <p class="text-xs text-neutral-400 mt-1 max-w-72">
                         {stream.device}
                       </p>
                     </div>
                   </div>
 
-                  <span
-                    class="px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider border {stream.method ===
-                    'DirectPlay'
-                      ? 'bg-green-500/20 text-green-400 border-green-500/30'
-                      : 'bg-orange-500/20 text-orange-400 border-orange-500/30'}"
-                  >
-                    {stream.method}
-                  </span>
+                  <MethodBadge method={stream.method} />
                 </div>
 
                 <div class="mb-6">
@@ -186,7 +171,7 @@
                       class="h-full {stream.status === 'Paused'
                         ? 'bg-yellow-500'
                         : 'bg-red-600'} transition-all duration-1000 ease-out"
-                      style="width: {stream.progress}%"
+                      style="width: {clamp(stream.progress)}%"
                     ></div>
                   </div>
                 </div>
@@ -238,6 +223,8 @@
                 <img
                   src={query.data.library.latest.movie.image}
                   alt={query.data.library.latest.movie.title}
+                  loading="lazy"
+                  decoding="async"
                   class="w-full h-full object-cover"
                 />
               </div>
@@ -297,6 +284,8 @@
                 <img
                   src={query.data.library.latest.episode.image}
                   alt={query.data.library.latest.episode.title}
+                  loading="lazy"
+                  decoding="async"
                   class="w-full h-full object-cover"
                 />
               </div>
@@ -356,6 +345,8 @@
                 <img
                   src={query.data.library.latest.music.image}
                   alt={query.data.library.latest.music.title}
+                  loading="lazy"
+                  decoding="async"
                   class="w-full h-full object-cover"
                 />
               </div>
