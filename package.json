@@ -1,15 +1,28 @@
 {
-  "name": "jnfo",
-  "version": "1.0.50",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "bun run --watch src/index.ts"
-  },
-  "dependencies": {
-    "elysia": "latest"
-  },
-  "devDependencies": {
-    "bun-types": "latest"
-  },
-  "module": "src/index.js"
+	"name": "jnfo",
+	"version": "1.0.0",
+	"module": "src/index.js",
+	"scripts": {
+		"install:client": "cd client && bun install",
+		"install:server": "bun install",
+		"install:all": "npm run install:server && npm run install:client",
+		"dev:client": "cd client && bun dev",
+		"dev:server": "bun --env-file .env --watch src/server.js",
+		"dev": "conc -n \"CLIENT,API\" -c \"cyan,magenta\" \"npm run dev:client\" \"npm run dev:server\"",
+		"build-client": "cd client && bun run build",
+		"build:all": "npm run build-client",
+		"start": "bun --env-file .env src/server.js",
+		"stop": "pm2 stop all",
+		"restart": "pm2 restart all",
+		"logs": "pm2 monit"
+	},
+	"dependencies": {
+		"@elysiajs/cors": "^1.4.0",
+		"@elysiajs/static": "^1.4.7",
+		"elysia": "latest"
+	},
+	"devDependencies": {
+		"bun-types": "latest",
+		"concurrently": "^9.2.1"
+	}
 }

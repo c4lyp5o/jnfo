@@ -1,0 +1,9 @@
+nodenode_modules
+client/node_modules
+client/dist
+dist
+.git
+.vscode
+*.log
+Dockerfile
+docker-compose.yml
