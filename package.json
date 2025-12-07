@@ -1,7 +1,7 @@
 {
 	"name": "jnfo",
 	"version": "1.0.0",
-	"module": "src/index.js",
+	"module": "src/server.js",
 	"scripts": {
 		"install:client": "cd client && bun install",
 		"install:server": "bun install",
@@ -11,10 +11,7 @@
 		"dev": "conc -n \"CLIENT,API\" -c \"cyan,magenta\" \"npm run dev:client\" \"npm run dev:server\"",
 		"build-client": "cd client && bun run build",
 		"build:all": "npm run build-client",
-		"start": "bun --env-file .env src/server.js",
-		"stop": "pm2 stop all",
-		"restart": "pm2 restart all",
-		"logs": "pm2 monit"
+		"start": "bun --env-file .env src/server.js"
 	},
 	"dependencies": {
 		"@elysiajs/cors": "^1.4.0",
