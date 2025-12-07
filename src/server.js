@@ -11,11 +11,28 @@ if (!JELLYFIN_URL || !JELLYFIN_API_KEY) {
 	process.exit(1);
 }
 
+// utils
+const formatTicksToHMS = (ticks) => {
+	const totalSeconds = Math.floor(ticks / 10000000);
+	const hours = Math.floor(totalSeconds / 3600);
+	const minutes = Math.floor((totalSeconds % 3600) / 60);
+	const seconds = totalSeconds % 60;
+	if (hours > 0) {
+		return [hours, minutes, seconds]
+			.map((v) => String(v).padStart(2, "0"))
+			.join(":");
+	} else {
+		return [minutes, seconds].map((v) => String(v).padStart(2, "0")).join(":");
+	}
+};
+
+const getImg = (item, type = "Primary") =>
+	item ? `${JELLYFIN_URL}/Items/${item.Id}/Images/${type}?maxWidth=400` : null;
+
 const app = new Elysia()
 	.use(cors())
 	.get("/api/v1/dashboard", async () => {
 		try {
-			// 1. Fetch Raw Data
 			const [sessionsRes, countsRes, usersRes, systemRes] = await Promise.all([
 				fetch(`${JELLYFIN_URL}/Sessions`, {
 					headers: { "X-Emby-Token": JELLYFIN_API_KEY },
@@ -61,8 +78,14 @@ const app = new Elysia()
 			const now = new Date();
 
 			const activeStreams = sessions
+				.sort((a, b) => {
+					// Sort by username first
+					const userCompare = a.UserName.localeCompare(b.UserName);
+					return userCompare !== 0 ? userCompare : 0;
+				})
 				.filter((s) => s.NowPlayingItem)
 				.map((s) => {
+					const item = s.NowPlayingItem;
 					// Calculate percentage: (Current Ticks / Total Ticks) * 100
 					const totalTicks = s.NowPlayingItem.RunTimeTicks;
 					const currentTicks = s.PlayState.PositionTicks;
@@ -74,12 +97,23 @@ const app = new Elysia()
 						id: s.Id,
 						user: s.UserName,
 						userImage: `${JELLYFIN_URL}/Users/${s.UserId}/Images/Primary`, // User Avatar
-						title: s.NowPlayingItem.Name,
+						type: item.Type, // 'Movie', 'Episode', 'Audio', etc.
+						title: item.Name,
+						year: item.ProductionYear,
+						// conditionals for series info
+						seriesName: item.SeriesName || null,
+						seasonNumber: item.SeasonName || null,
+						// episodeNumber: item.IndexNumber || null, // soon
+						albumName: item.Album || null,
+						artistName: item.AlbumArtist || null,
 						// Use Backdrop if available, otherwise Primary
-						image: `${JELLYFIN_URL}/Items/${s.NowPlayingItem.Id}/Images/Backdrop/0?maxWidth=800`,
+						image: `${JELLYFIN_URL}/Items/${item.Id}/Images/Backdrop/0?maxWidth=800`,
 						device: `${s.Client} (${s.DeviceName})`,
 						status: s.PlayState.IsPaused ? "Paused" : "Playing",
-						method: s.PlayState.PlayMethod, // 'DirectPlay' or 'Transcode'
+						method: s.PlayState.PlayMethod, // 'DirectPlay' or 'DirectStream' etc.
+						// convert ticks to hh:mm:ss
+						totalTicks: formatTicksToHMS(totalTicks),
+						currentTicks: formatTicksToHMS(currentTicks),
 						progress: progress,
 					};
 				});
@@ -107,11 +141,6 @@ const app = new Elysia()
 					lastActive: u.LastActivityDate,
 					isAdmin: u.Policy.IsAdministrator,
 				}));
-
-			const getImg = (item, type = "Primary") =>
-				item
-					? `${JELLYFIN_URL}/Items/${item.Id}/Images/${type}?maxWidth=400`
-					: null;
 
 			return {
 				system: {
