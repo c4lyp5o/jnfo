@@ -13,7 +13,7 @@
       if (!res.ok) throw new Error("Network error");
       return res.json();
     },
-    refetchInterval: 5000,
+    refetchInterval: 15000,
   }));
 
   let movieIndex = $state(0);
