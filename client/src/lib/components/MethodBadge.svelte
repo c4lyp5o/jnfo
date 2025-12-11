@@ -8,7 +8,7 @@
   };
 
   // fallback if unknown
-  $: cls =
+  let cls =
     styles[method] ?? "bg-neutral-700 text-neutral-300 border-neutral-600";
 </script>
 
