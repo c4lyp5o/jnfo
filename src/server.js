@@ -26,9 +26,6 @@ const formatTicksToHMS = (ticks) => {
 	}
 };
 
-const getImg = (item, type = "Primary") =>
-	item ? `${JELLYFIN_URL}/Items/${item.Id}/Images/${type}?maxWidth=400` : null;
-
 const app = new Elysia()
 	.use(cors())
 	.get("/api/v1/dashboard", async () => {
@@ -56,32 +53,85 @@ const app = new Elysia()
 			const adminUser = users.find((u) => u.Policy.IsAdministrator);
 			const adminId = adminUser ? adminUser.Id : users[0].Id;
 
-			const [latestMovieRes, latestEpRes, latestMusicRes] = await Promise.all([
-				fetch(
-					`${JELLYFIN_URL}/Users/${adminId}/Items/Latest?Limit=1&IncludeItemTypes=Movie`,
-					{ headers: { "X-Emby-Token": JELLYFIN_API_KEY } },
-				),
-				fetch(
-					`${JELLYFIN_URL}/Users/${adminId}/Items/Latest?Limit=1&IncludeItemTypes=Series`,
-					{ headers: { "X-Emby-Token": JELLYFIN_API_KEY } },
-				),
-				fetch(
-					`${JELLYFIN_URL}/Users/${adminUser.Id}/Items/Latest?Limit=1&IncludeItemTypes=Audio`,
-					{ headers: { "X-Emby-Token": JELLYFIN_API_KEY } },
-				),
-			]);
+			const [latestMovieRes, latestEpisodesRes, latestMusicRes] =
+				await Promise.all([
+					fetch(
+						`${JELLYFIN_URL}/Users/${adminId}/Items/Latest?Limit=10&IncludeItemTypes=Movie`,
+						{ headers: { "X-Emby-Token": JELLYFIN_API_KEY } },
+					),
+					fetch(
+						`${JELLYFIN_URL}/Users/${adminId}/Items/Latest?Limit=10&IncludeItemTypes=Episode`,
+						{ headers: { "X-Emby-Token": JELLYFIN_API_KEY } },
+					),
+					fetch(
+						`${JELLYFIN_URL}/Users/${adminId}/Items/Latest?Limit=10&IncludeItemTypes=Audio`,
+						{ headers: { "X-Emby-Token": JELLYFIN_API_KEY } },
+					),
+				]);
 
-			const latestMovie = (await latestMovieRes.json())[0];
-			const latestEp = (await latestEpRes.json())[0];
-			const latestMusic = (await latestMusicRes.json())[0];
+			const latestMovies = await latestMovieRes.json();
+			const latestEpisodes = await latestEpisodesRes.json();
+			const latestMusic = await latestMusicRes.json();
 
 			const now = new Date();
+
+			const movieCarousel = latestMovies
+				.map((m) => ({
+					id: m.Id,
+					title: m.Name,
+					year: m.ProductionYear,
+					image: `${JELLYFIN_URL}/Items/${m.Id}/Images/Primary?fillWidth=400&quality=90`,
+				}))
+				.sort((a, b) => b.year - a.year);
+
+			// 3. Map & Sort TV Episodes
+			const episodeCarousel = latestEpisodes
+				.map((e) => {
+					// LOGIC: Handle Series vs Episode differences
+					const isEpisode = e.Type === "Episode";
+
+					return {
+						id: e.Id,
+						// If it's an episode, use its name. If it's a Series, use the Series Name.
+						title: isEpisode ? e.Name : e.Name,
+
+						// If it's an episode, show the Parent Name. If it's a Series, label it "New Series".
+						series: isEpisode ? e.SeriesName : "New Series Premiere",
+
+						year: e.ProductionYear,
+						date: e.PremiereDate,
+
+						// Series often use 'Primary' or 'Thumb', Episodes use 'Primary'
+						image: `${JELLYFIN_URL}/Items/${e.Id}/Images/Primary?fillWidth=400&quality=90`,
+
+						// Pass the type to frontend so we can maybe style 'New Series' differently
+						type: e.Type,
+					};
+				})
+				.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+			// 4. Map & Sort Music
+			const musicCarousel = latestMusic
+				.map((m) => ({
+					id: m.Id,
+					title: m.Name,
+					artist: m.AlbumArtist || m.Artists?.[0] || "Unknown",
+					album: m.AlbumName,
+					year: m.ProductionYear,
+					image: `${JELLYFIN_URL}/Items/${m.Id}/Images/Primary?fillWidth=400&quality=90`,
+				}))
+				.sort((a, b) => b.year - a.year);
 
 			const activeStreams = sessions
 				.sort((a, b) => {
 					// Sort by username first
 					const userCompare = a.UserName.localeCompare(b.UserName);
-					return userCompare !== 0 ? userCompare : 0;
+					if (userCompare !== 0) return userCompare;
+
+					// If usernames are equal, sort by the now-playing item's title
+					const aTitle = a.NowPlayingItem?.Name ?? "";
+					const bTitle = b.NowPlayingItem?.Name ?? "";
+					return aTitle.localeCompare(bTitle);
 				})
 				.filter((s) => s.NowPlayingItem)
 				.map((s) => {
@@ -143,6 +193,10 @@ const app = new Elysia()
 				}));
 
 			return {
+				config: {
+					publicUrl: JELLYFIN_URL,
+					token: JELLYFIN_API_KEY,
+				},
 				system: {
 					serverName: systemInfo.ServerName,
 					version: systemInfo.Version,
@@ -151,31 +205,9 @@ const app = new Elysia()
 				library: {
 					...counts,
 					latest: {
-						movie: latestMovie
-							? {
-									title: latestMovie.Name,
-									year: latestMovie.ProductionYear,
-									image:
-										getImg(latestMovie, "Backdrop") ||
-										getImg(latestMovie, "Primary"),
-								}
-							: null,
-						episode: latestEp
-							? {
-									title: latestEp.Name,
-									year: latestEp.PremiereDate
-										? new Date(latestEp.PremiereDate).getFullYear()
-										: "N/A",
-									image: getImg(latestEp, "Primary"), // Episodes usually have Primary images (thumbnails)
-								}
-							: null,
-						music: latestMusic
-							? {
-									title: latestMusic.Name,
-									artist: latestMusic.AlbumArtist || latestMusic.Artists[0],
-									image: getImg(latestMusic, "Primary"), // Album art
-								}
-							: null,
+						movies: movieCarousel,
+						episodes: episodeCarousel,
+						music: musicCarousel,
 					},
 				},
 				activeStreams,
