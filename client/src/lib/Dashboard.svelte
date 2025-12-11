@@ -1,5 +1,10 @@
 <script lang="js">
+  import { onMount } from "svelte";
+  import { fade, scale } from "svelte/transition";
   import { createQuery } from "@tanstack/svelte-query";
+
+  import Streams from "./components/Streams.svelte";
+  import { fmt, formatDate } from "./utils/format";
 
   const query = createQuery(() => ({
     queryKey: ["dashboard-stats"],
@@ -11,13 +16,47 @@
     refetchInterval: 5000,
   }));
 
-  import MethodBadge from "$lib/components/MethodBadge.svelte";
-  import { fmt, formatDate, clamp } from "./utils/format";
+  let movieIndex = $state(0);
+  let episodeIndex = $state(0);
+  let musicIndex = $state(0);
+
+  let playingItem = $state(null);
+
+  const playMovie = (movie) => {
+    playingItem = movie;
+  };
+
+  const closePlayer = () => {
+    playingItem = null;
+  };
+
+  onMount(() => {
+    const interval = setInterval(() => {
+      const lib = query.data?.library?.latest;
+
+      if (!lib) return;
+
+      if (lib.movies?.length > 1) {
+        movieIndex = (movieIndex + 1) % lib.movies.length;
+      }
+
+      if (lib.episodes?.length > 1) {
+        episodeIndex = (episodeIndex + 1) % lib.episodes.length;
+      }
+
+      if (lib.music?.length > 1) {
+        musicIndex = (musicIndex + 1) % lib.music.length;
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  });
 </script>
 
 <div
   class="min-h-screen bg-neutral-950 text-neutral-100 p-6 md:p-10 font-sans selection:bg-purple-500/30"
 >
+  <!-- Header -->
   <header
     class="mb-10 flex flex-col md:flex-row md:items-center justify-between gap-4"
   >
@@ -33,13 +72,24 @@
       <div aria-live="polite">
         <div
           class="h-2.5 w-2.5 rounded-full shadow-[0_0_10px_currentColor]
-      {query.isFetching ? 'bg-yellow-400' : 'bg-green-500'}"
+    {query.isError
+            ? 'bg-red-500'
+            : query.isFetching
+              ? 'bg-yellow-400'
+              : 'bg-green-500 animate-pulse'}"
         ></div>
       </div>
+
       <span
         class="text-xs font-medium tracking-wide uppercase text-neutral-400"
       >
-        {query.isFetching ? "Syncing..." : "System Operational"}
+        {#if query.isError}
+          Connection Lost
+        {:else if query.isLoading}
+          Connecting...
+        {:else}
+          System Operational
+        {/if}
       </span>
     </div>
   </header>
@@ -51,6 +101,7 @@
       System Malfunction
     </div>
   {:else if query.data}
+    <!-- Streams -->
     <section class="mb-12">
       <h2 class="text-lg font-semibold mb-4 flex items-center gap-2 text-white">
         <span
@@ -68,121 +119,15 @@
       {:else}
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {#each query.data.activeStreams as stream}
-            <div
-              class="relative bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden shadow-2xl group"
-            >
-              <div class="absolute inset-0">
-                <img
-                  src={stream.image}
-                  alt={stream.title}
-                  loading="lazy"
-                  decoding="async"
-                  class="w-full h-full object-cover opacity-30 blur-sm group-hover:blur-0 group-hover:opacity-40 transition-all duration-700"
-                />
-                <div
-                  class="absolute inset-0 bg-linear-to-t from-neutral-950 via-neutral-950/80 to-transparent"
-                ></div>
-              </div>
-
-              <div class="relative p-6 z-10">
-                <div class="flex justify-between items-start mb-4">
-                  <div class="flex items-center gap-3">
-                    <div
-                      class="w-10 h-10 rounded-full bg-neutral-700 flex items-center justify-center font-bold text-white border border-neutral-600 shadow-md"
-                    >
-                      {stream.user.slice(0, 2).toUpperCase()}
-                    </div>
-                    <div>
-                      <p class="font-bold text-white leading-none text-sm">
-                        {stream.user}
-                      </p>
-                      <p class="text-xs text-neutral-400 mt-1 max-w-72">
-                        {stream.device}
-                      </p>
-                    </div>
-                  </div>
-
-                  <MethodBadge method={stream.method} />
-                </div>
-
-                <div class="mb-6">
-                  <h3
-                    class="text-xl md:text-2xl font-bold text-white line-clamp-1"
-                    title={stream.title}
-                  >
-                    {stream.title}
-                  </h3>
-
-                  {#if stream.type === "Episode"}
-                    <div class="flex items-center gap-2 mt-1">
-                      <svg
-                        class="w-4 h-4 text-purple-400 shrink-0"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                        ><path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
-                        ></path></svg
-                      >
-                      <p class="text-sm text-neutral-400 line-clamp-1">
-                        {stream.seriesName}
-                      </p>
-                    </div>
-                  {:else if stream.type === "Audio"}
-                    <div class="flex items-center gap-2 mt-1">
-                      <svg
-                        class="w-4 h-4 text-pink-400 shrink-0"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                        ><path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z"
-                        ></path></svg
-                      >
-                      <p class="text-sm text-neutral-400 line-clamp-1">
-                        {stream.artistName} <span class="opacity-50">•</span>
-                        {stream.albumName}
-                      </p>
-                    </div>
-                  {:else}
-                    <p class="text-sm text-neutral-500 mt-1">
-                      {stream.year || "Movie"}
-                    </p>
-                  {/if}
-                </div>
-
-                <div class="space-y-2">
-                  <div
-                    class="flex justify-between text-xs font-medium text-neutral-400 font-mono"
-                  >
-                    <span>{stream.status}</span>
-                    <span>{stream.currentTicks} / {stream.totalTicks}</span>
-                  </div>
-                  <div
-                    class="h-1.5 w-full bg-neutral-800 rounded-full overflow-hidden"
-                  >
-                    <div
-                      class="h-full {stream.status === 'Paused'
-                        ? 'bg-yellow-500'
-                        : 'bg-red-600'} transition-all duration-1000 ease-out"
-                      style="width: {clamp(stream.progress)}%"
-                    ></div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <Streams {stream} />
           {/each}
         </div>
       {/if}
     </section>
 
+    <!-- Server Items -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <!-- Movies Stats -->
       <div
         class="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 flex flex-col justify-between min-h-88 group hover:border-blue-500/50 transition-colors relative overflow-hidden"
       >
@@ -208,40 +153,76 @@
           <p class="text-sm text-neutral-500 mt-1">Titles in library</p>
         </div>
 
-        {#if query.data.library.latest.movie}
+        <!-- Latest Movies -->
+        {#if query.data.library.latest.movies && query.data.library.latest.movies.length > 0}
           <div class="relative z-10 mt-6">
-            <p
-              class="text-[10px] text-neutral-500 uppercase font-bold mb-3 tracking-widest"
-            >
-              Latest Movie
-            </p>
+            <div class="flex justify-between items-end mb-3">
+              <p
+                class="text-[10px] text-neutral-500 uppercase font-bold tracking-widest"
+              >
+                Latest Movies
+              </p>
+
+              <!-- carousel indicators -->
+              <div class="flex gap-1">
+                {#each query.data.library.latest.movies as _, i}
+                  <div
+                    class="h-1 rounded-full transition-all duration-300 {i ===
+                    movieIndex
+                      ? 'w-4 bg-blue-500'
+                      : 'w-1 bg-neutral-700'}"
+                  ></div>
+                {/each}
+              </div>
+            </div>
 
             <div
               class="bg-black rounded-lg overflow-hidden border border-neutral-800 group-hover:border-neutral-600 transition-colors"
+              role="button"
+              tabindex="0"
+              onclick={() =>
+                playMovie(query.data.library.latest.movies[movieIndex])}
+              onkeydown={(e) =>
+                e.key === "Enter" &&
+                playMovie(query.data.library.latest.movies[movieIndex])}
             >
-              <div class="aspect-video w-full relative">
-                <img
-                  src={query.data.library.latest.movie.image}
-                  alt={query.data.library.latest.movie.title}
-                  loading="lazy"
-                  decoding="async"
-                  class="w-full h-full object-cover"
-                />
+              <!-- taller aspect ratio for vertical box art -->
+              <div class="w-full relative">
+                {#key movieIndex}
+                  <img
+                    src={query.data.library.latest.movies[movieIndex].image}
+                    alt={query.data.library.latest.movies[movieIndex].title}
+                    loading="lazy"
+                    decoding="async"
+                    class="w-full h-auto object-contain animate-fade-in"
+                  />
+                {/key}
               </div>
 
               <div class="p-3 bg-neutral-800/50">
-                <h4 class="text-white font-semibold text-sm line-clamp-1">
-                  {query.data.library.latest.movie.title}
-                </h4>
-                <p class="text-xs text-neutral-400">
-                  {query.data.library.latest.movie.year || "Unknown Year"}
-                </p>
+                {#key movieIndex}
+                  <div class="animate-slide-up">
+                    <p
+                      class="text-xs font-bold uppercase tracking-wider mb-0.5 line-clamp-1 text-blue-400"
+                    >
+                      MOVIE
+                    </p>
+                    <h4 class="text-white font-semibold text-sm line-clamp-1">
+                      {query.data.library.latest.movies[movieIndex].title}
+                    </h4>
+                    <p class="text-xs text-neutral-400">
+                      {query.data.library.latest.movies[movieIndex].year ||
+                        "Unknown"}
+                    </p>
+                  </div>
+                {/key}
               </div>
             </div>
           </div>
         {/if}
       </div>
 
+      <!-- TV Shows Stats -->
       <div
         class="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 flex flex-col justify-between min-h-88 group hover:border-purple-500/50 transition-colors relative overflow-hidden"
       >
@@ -269,40 +250,73 @@
           </p>
         </div>
 
-        {#if query.data.library.latest.episode}
+        <!-- Latest TV Shows -->
+        {#if query.data.library.latest.episodes && query.data.library.latest.episodes.length > 0}
           <div class="relative z-10 mt-6">
-            <p
-              class="text-[10px] text-neutral-500 uppercase font-bold mb-3 tracking-widest"
-            >
-              Latest Episode
-            </p>
+            <div class="flex justify-between items-end mb-3">
+              <p
+                class="text-[10px] text-neutral-500 uppercase font-bold tracking-widest"
+              >
+                Latest TV Shows
+              </p>
+
+              <!-- carousel indicators -->
+              <div class="flex gap-1">
+                {#each query.data.library.latest.episodes as _, i}
+                  <div
+                    class="h-1 rounded-full transition-all duration-300 {i ===
+                    episodeIndex
+                      ? 'w-4 bg-purple-500'
+                      : 'w-1 bg-neutral-700'}"
+                  ></div>
+                {/each}
+              </div>
+            </div>
 
             <div
               class="bg-black rounded-lg overflow-hidden border border-neutral-800 group-hover:border-neutral-600 transition-colors"
             >
-              <div class="aspect-video w-full relative">
-                <img
-                  src={query.data.library.latest.episode.image}
-                  alt={query.data.library.latest.episode.title}
-                  loading="lazy"
-                  decoding="async"
-                  class="w-full h-full object-cover"
-                />
+              <!-- taller aspect ratio for vertical box art -->
+              <div class="w-full relative">
+                {#key episodeIndex}
+                  <img
+                    src={query.data.library.latest.episodes[episodeIndex].image}
+                    alt={query.data.library.latest.episodes[episodeIndex].title}
+                    loading="lazy"
+                    decoding="async"
+                    class="w-full h-auto object-contain animate-fade-in"
+                  />
+                {/key}
               </div>
 
               <div class="p-3 bg-neutral-800/50">
-                <h4 class="text-white font-semibold text-sm line-clamp-1">
-                  {query.data.library.latest.episode.title}
-                </h4>
-                <p class="text-xs text-neutral-400">
-                  {query.data.library.latest.episode.year}
-                </p>
+                {#key episodeIndex}
+                  <div class="animate-slide-up">
+                    <p
+                      class="text-xs font-bold uppercase tracking-wider mb-0.5 line-clamp-1
+         {query.data.library.latest.episodes[episodeIndex].type === 'Series'
+                        ? 'text-green-400'
+                        : 'text-purple-400'}"
+                    >
+                      {query.data.library.latest.episodes[episodeIndex].series}
+                    </p>
+                    <h4 class="text-white font-semibold text-sm line-clamp-1">
+                      {query.data.library.latest.episodes[episodeIndex].title}
+                    </h4>
+                    <p class="text-xs text-neutral-400">
+                      {new Date(
+                        query.data.library.latest.episodes[episodeIndex].date,
+                      ).getFullYear() || "Unknown"}
+                    </p>
+                  </div>
+                {/key}
               </div>
             </div>
           </div>
         {/if}
       </div>
 
+      <!-- Music Stats -->
       <div
         class="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 flex flex-col justify-between min-h-88 group hover:border-pink-500/50 transition-colors relative overflow-hidden"
       >
@@ -330,34 +344,62 @@
           </p>
         </div>
 
-        {#if query.data.library.latest.music}
+        <!-- Latest Music -->
+        {#if query.data.library.latest.music && query.data.library.latest.music.length > 0}
           <div class="relative z-10 mt-6">
-            <p
-              class="text-[10px] text-neutral-500 uppercase font-bold mb-3 tracking-widest"
-            >
-              Latest Music
-            </p>
+            <div class="flex justify-between items-end mb-3">
+              <p
+                class="text-[10px] text-neutral-500 uppercase font-bold tracking-widest"
+              >
+                Latest Music
+              </p>
+
+              <!-- carousel indicators -->
+              <div class="flex gap-1">
+                {#each query.data.library.latest.music as _, i}
+                  <div
+                    class="h-1 rounded-full transition-all duration-300 {i ===
+                    movieIndex
+                      ? 'w-4 bg-pink-500'
+                      : 'w-1 bg-neutral-700'}"
+                  ></div>
+                {/each}
+              </div>
+            </div>
 
             <div
               class="bg-black rounded-lg overflow-hidden border border-neutral-800 group-hover:border-neutral-600 transition-colors"
             >
-              <div class="aspect-video w-full relative">
-                <img
-                  src={query.data.library.latest.music.image}
-                  alt={query.data.library.latest.music.title}
-                  loading="lazy"
-                  decoding="async"
-                  class="w-full h-full object-cover"
-                />
+              <!-- taller aspect ratio for vertical box art -->
+              <div class="w-full relative">
+                {#key musicIndex}
+                  <img
+                    src={query.data.library.latest.music[musicIndex].image}
+                    alt={query.data.library.latest.music[musicIndex].title}
+                    loading="lazy"
+                    decoding="async"
+                    class="w-full h-auto object-contain animate-fade-in"
+                  />
+                {/key}
               </div>
 
               <div class="p-3 bg-neutral-800/50">
-                <h4 class="text-white font-semibold text-sm line-clamp-1">
-                  {query.data.library.latest.music.title}
-                </h4>
-                <p class="text-xs text-neutral-400">
-                  {query.data.library.latest.music.artist}
-                </p>
+                {#key musicIndex}
+                  <div class="animate-slide-up">
+                    <p
+                      class="text-xs font-bold uppercase tracking-wider mb-0.5 line-clamp-1 text-pink-500"
+                    >
+                      {query.data.library.latest.music[musicIndex].artist}
+                    </p>
+                    <h4 class="text-white font-semibold text-sm line-clamp-1">
+                      {query.data.library.latest.music[musicIndex].title}
+                    </h4>
+                    <p class="text-xs text-neutral-400">
+                      {query.data.library.latest.music[musicIndex].year ||
+                        "Unknown"}
+                    </p>
+                  </div>
+                {/key}
               </div>
             </div>
           </div>
@@ -365,6 +407,7 @@
       </div>
     </div>
 
+    <!-- Users Stats -->
     <div
       class="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden grid grid-cols-1 md:grid-cols-2 shadow-lg"
     >
@@ -418,7 +461,7 @@
 
       <div class="p-6 bg-neutral-950/30">
         <div class="flex items-center justify-between mb-6">
-          <h3 class="text-neutral-300 font-semibold">User Roster</h3>
+          <h3 class="text-neutral-300 font-semibold">Users List</h3>
           <span
             class="text-xs text-neutral-500 uppercase tracking-wider font-bold"
             >{query.data.userRoster.length} Registered</span
@@ -454,7 +497,7 @@
                 <span
                   class="text-xs text-neutral-600 group-hover:text-neutral-400"
                 >
-                  {formatDate(user.lastActive)}
+                  Last seen: {formatDate(user.lastActive)}
                 </span>
               </li>
             {/each}
@@ -463,6 +506,7 @@
       </div>
     </div>
 
+    <!-- Server Stats -->
     <footer
       class="mt-12 pt-6 border-t border-neutral-900 flex justify-between items-center text-xs text-neutral-600"
     >
@@ -485,6 +529,57 @@
   {/if}
 </div>
 
+{#if playingItem}
+  <div
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md p-4 md:p-10"
+    transition:fade={{ duration: 200 }}
+    onclick={closePlayer}
+    role="dialog"
+    tabindex="0"
+    aria-modal="true"
+  >
+    <button
+      class="absolute top-6 right-6 z-50 p-2 bg-neutral-800/50 hover:bg-neutral-700 text-white rounded-full transition-colors"
+      onclick={closePlayer}
+      aria-label="Play Button"
+    >
+      <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+        ><path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M6 18L18 6M6 6l12 12"
+        ></path></svg
+      >
+    </button>
+
+    <div
+      class="w-full max-w-7xl aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl relative border border-neutral-800"
+      transition:scale={{ start: 0.95, duration: 200 }}
+      role="document"
+    >
+      {#if query.data?.config}
+        <video class="w-full h-full" controls autoplay playsinline>
+          <source
+            src={`${query.data.config.publicUrl}/Videos/${playingItem.id}/stream.mp4?static=false&api_key=${query.data.config.token}`}
+            type="video/mp4"
+          />
+          Your browser does not support HTML5 video.
+        </video>
+      {/if}
+
+      <div
+        class="absolute top-0 left-0 w-full p-8 bg-gradient-to-b from-black/90 to-transparent pointer-events-none transition-opacity duration-500 hover:opacity-0"
+      >
+        <h2 class="text-3xl font-bold text-white drop-shadow-md">
+          {playingItem.title}
+        </h2>
+        <p class="text-neutral-300 font-medium">{playingItem.year}</p>
+      </div>
+    </div>
+  </div>
+{/if}
+
 <style>
   /* Custom Scrollbar for the user list to keep it sleek */
   .custom-scrollbar::-webkit-scrollbar {
@@ -500,5 +595,35 @@
   }
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.2);
+  }
+
+  /* Simple Fade Animation */
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: scale(1.05);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  .animate-fade-in {
+    animation: fadeIn 0.5s ease-out forwards;
+  }
+
+  /* Text Slide Up Animation */
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(5px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .animate-slide-up {
+    animation: slideUp 0.4s ease-out forwards;
   }
 </style>
